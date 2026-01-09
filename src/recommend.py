@@ -1,7 +1,7 @@
 # recommend.py
 import joblib
 import logging
-
+import pandas as pd
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
