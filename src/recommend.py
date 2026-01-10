@@ -1,41 +1,64 @@
 # recommend.py
-import joblib
+import os
 import logging
 import pandas as pd
-# Setup logging
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+# ---------------- PATH FIX (VERY IMPORTANT) ----------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_PATH = os.path.join(BASE_DIR, "spotify_small.csv")
+df = pd.read_csv(CSV_PATH)
+
+
+# ---------------- LOGGING ----------------
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("recommend.log", encoding="utf-8"),
-        logging.StreamHandler()
-    ]
+    handlers=[logging.StreamHandler()]
 )
 
-logging.info("🔁 Loading data...")
-try:
-    df = joblib.load('df_cleaned.pkl')
-    cosine_sim = joblib.load('cosine_sim.pkl')
-    logging.info("✅ Data loaded successfully.")
-except Exception as e:
-    logging.error("❌ Failed to load required files: %s", str(e))
-    raise e
+logging.info("🔁 Loading dataset...")
 
+# ---------------- LOAD DATA ----------------
+df = pd.read_csv(CSV_PATH)
+df["text"] = df["text"].fillna("")
 
+logging.info("✅ Dataset loaded: %d songs", len(df))
+
+# ---------------- TF-IDF + COSINE ----------------
+logging.info("🔁 Building TF-IDF matrix...")
+
+vectorizer = TfidfVectorizer(
+    stop_words="english",
+    max_features=5000
+)
+
+tfidf_matrix = vectorizer.fit_transform(df["text"])
+cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+
+logging.info("✅ Similarity matrix ready.")
+
+# ---------------- RECOMMEND FUNCTION ----------------
 def recommend_songs(song_name, top_n=5):
-    logging.info("🎵 Recommending songs for: '%s'", song_name)
-    idx = df[df['song'].str.lower() == song_name.lower()].index
-    if len(idx) == 0:
-        logging.warning("⚠️ Song not found in dataset.")
+    logging.info("🎵 Recommending songs for: %s", song_name)
+
+    matches = df[df["song"].str.lower() == song_name.lower()]
+
+    if matches.empty:
+        logging.warning("⚠️ Song not found.")
         return None
-    idx = idx[0]
+
+    idx = matches.index[0]
     sim_scores = list(enumerate(cosine_sim[idx]))
+
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:top_n + 1]
     song_indices = [i[0] for i in sim_scores]
-    logging.info("✅ Top %d recommendations ready.", top_n)
-    # Create DataFrame with clean serial numbers starting from 1
-    result_df = df[['artist', 'song']].iloc[song_indices].reset_index(drop=True)
-    result_df.index = result_df.index + 1  # Start from 1 instead of 0
+
+    result_df = df.loc[song_indices, ["artist", "song"]].reset_index(drop=True)
+    result_df.index += 1
     result_df.index.name = "S.No."
 
+    logging.info("✅ %d recommendations generated.", top_n)
     return result_df
+
