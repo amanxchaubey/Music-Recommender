@@ -1,17 +1,14 @@
-# recommend.py
 import os
 import logging
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# ---------------- PATH FIX (VERY IMPORTANT) ----------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.join(BASE_DIR, "spotify_small.csv")
-df = pd.read_csv(CSV_PATH)
 
 
-# ---------------- LOGGING ----------------
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] %(levelname)s - %(message)s',
@@ -20,26 +17,26 @@ logging.basicConfig(
 
 logging.info("🔁 Loading dataset...")
 
-# ---------------- LOAD DATA ----------------
-df = pd.read_csv(CSV_PATH)
-df["text"] = df["text"].fillna("")
 
+df = pd.read_csv(CSV_PATH)
+
+
+required_cols = ["song", "artist", "text"]
+for col in required_cols:
+    if col not in df.columns:
+        raise ValueError(f"Column '{col}' is missing in CSV!")
+
+df["text"] = df["text"].fillna("")
 logging.info("✅ Dataset loaded: %d songs", len(df))
 
-# ---------------- TF-IDF + COSINE ----------------
+
 logging.info("🔁 Building TF-IDF matrix...")
-
-vectorizer = TfidfVectorizer(
-    stop_words="english",
-    max_features=5000
-)
-
+vectorizer = TfidfVectorizer(stop_words="english", max_features=5000)
 tfidf_matrix = vectorizer.fit_transform(df["text"])
 cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
-
 logging.info("✅ Similarity matrix ready.")
 
-# ---------------- RECOMMEND FUNCTION ----------------
+
 def recommend_songs(song_name, top_n=5):
     logging.info("🎵 Recommending songs for: %s", song_name)
 
@@ -47,11 +44,10 @@ def recommend_songs(song_name, top_n=5):
 
     if matches.empty:
         logging.warning("⚠️ Song not found.")
-        return None
+        return pd.DataFrame(columns=["artist", "song"])
 
     idx = matches.index[0]
     sim_scores = list(enumerate(cosine_sim[idx]))
-
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:top_n + 1]
     song_indices = [i[0] for i in sim_scores]
 
@@ -61,4 +57,5 @@ def recommend_songs(song_name, top_n=5):
 
     logging.info("✅ %d recommendations generated.", top_n)
     return result_df
+
 
